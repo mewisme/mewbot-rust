@@ -113,13 +113,16 @@ async fn main() -> Result<()> {
         });
     }
 
-    let intents =
-        GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT | GatewayIntents::GUILDS;
+    let intents = GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILDS
+        | GatewayIntents::GUILD_VOICE_STATES;
 
     let mut client = Client::builder(&config.discord_token, intents)
         .event_handler(Handler {
             bot_context: bot_context.clone(),
         })
+        .register_songbird()
         .await?;
 
     crate::info!("Starting bot...");

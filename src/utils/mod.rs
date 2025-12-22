@@ -89,4 +89,6 @@ pub fn register_commands(registry: &mut Registry, bot_context: Arc<BotContext>) 
     registry.register(flashback::create());
     let help_cmd = help::create(bot_context.registry.clone(), bot_context.config.clone());
     registry.register(help_cmd);
+    registry.register(lofi::create());
+    registry.register(leave::create());
 }

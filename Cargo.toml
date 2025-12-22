@@ -1,6 +1,6 @@
 [package]
 name = "mewbot-rust"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["Mew"]
 description = "A Discord bot built with Rust using the Serenity framework. Supports both slash commands and prefix commands with cooldowns, auto-reload in dev mode, and a dynamic help system."
@@ -32,6 +32,7 @@ env_logger = "0.11"
 log = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 reqwest = { version = "0.12", features = ["json"] }
+songbird = "0.5.0"
 
 [profile.release]
 opt-level = "z"

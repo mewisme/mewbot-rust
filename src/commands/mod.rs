@@ -31,3 +31,5 @@ pub trait Command: Send + Sync {
 
 pub mod flashback;
 pub mod help;
+pub mod leave;
+pub mod lofi;

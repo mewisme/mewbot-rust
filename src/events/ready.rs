@@ -5,7 +5,6 @@ use serenity::prelude::Context;
 pub async fn ready(ctx: Context, ready: Ready, bot_context: &BotContext) {
     crate::done!("{} is connected!", ready.user.name);
 
-    crate::info!("Clearing existing global commands...");
     match ctx.http.get_global_commands().await {
         Ok(existing_commands) => {
             for existing_cmd in existing_commands {
@@ -15,8 +14,6 @@ pub async fn ready(ctx: Context, ready: Ready, bot_context: &BotContext) {
                         existing_cmd.name,
                         e
                     );
-                } else {
-                    crate::info!("Deleted existing command: {}", existing_cmd.name);
                 }
             }
         }

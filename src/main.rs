@@ -3,8 +3,10 @@ mod commands;
 mod config;
 mod context;
 mod events;
+mod permissions;
 mod registry;
 mod utils;
+mod wallet_store;
 
 use anyhow::Result;
 use clap::Parser;
@@ -63,7 +65,6 @@ async fn main() -> Result<()> {
     }
 
     let config = Config::load()?;
-    crate::utils::logger::init(config.enable_file_line_log);
     crate::done!("Configuration loaded successfully");
 
     let registry = Registry::new();
@@ -76,53 +77,15 @@ async fn main() -> Result<()> {
     }
     crate::done!("Commands registered");
 
-    if config.dev_mode {
-        crate::info!("Dev mode enabled - setting up auto-reload");
-        let _bot_context_clone = bot_context.clone();
-        tokio::spawn(async move {
-            use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-            use std::path::Path;
-            use std::sync::mpsc;
-            use std::time::Duration;
-
-            let (tx, rx) = mpsc::channel();
-            let config = Config::default().with_poll_interval(Duration::from_secs(2));
-            let mut watcher = RecommendedWatcher::new(tx, config).unwrap();
-
-            let commands_dir = Path::new("src/commands");
-            if commands_dir.exists() {
-                watcher
-                    .watch(commands_dir, RecursiveMode::NonRecursive)
-                    .unwrap();
-                crate::info!("Watching commands directory for changes...");
-            }
-
-            loop {
-                match rx.recv() {
-                    Ok(event) => {
-                        crate::info!("File change detected: {:?}", event);
-                        crate::warn!(
-                            "Note: Command reload requires restart in current implementation"
-                        );
-                    }
-                    Err(e) => {
-                        crate::error!("Watch error: {:?}", e);
-                    }
-                }
-            }
-        });
-    }
-
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::GUILDS
-        | GatewayIntents::GUILD_VOICE_STATES;
+        | GatewayIntents::GUILD_MEMBERS;
 
     let mut client = Client::builder(&config.discord_token, intents)
         .event_handler(Handler {
             bot_context: bot_context.clone(),
         })
-        .register_songbird()
         .await?;
 
     crate::info!("Starting bot...");

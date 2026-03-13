@@ -1,3 +1,4 @@
+use crate::permissions::PermissionLevel;
 use async_trait::async_trait;
 use serenity::builder::CreateCommand;
 use serenity::model::application::CommandInteraction;
@@ -27,9 +28,12 @@ pub trait Command: Send + Sync {
     fn cooldown_duration(&self) -> Duration {
         Duration::from_secs(3)
     }
+
+    /// Minimum permission level required to run this command. `None` = any member.
+    fn required_permission_level(&self) -> Option<PermissionLevel> {
+        None
+    }
 }
 
-pub mod flashback;
 pub mod help;
-pub mod leave;
-pub mod lofi;
+pub mod wallet;

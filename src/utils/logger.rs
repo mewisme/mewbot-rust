@@ -1,10 +1,6 @@
 #![allow(dead_code)]
 
 use chrono::Local;
-use std::sync::atomic::{AtomicBool, Ordering};
-
-/// Global flag to control whether file:line is shown in logs
-static ENABLE_FILE_LINE_LOG: AtomicBool = AtomicBool::new(true);
 
 /// ANSI color codes
 mod colors {
@@ -78,11 +74,6 @@ macro_rules! log_location {
     };
 }
 
-/// Initialize the logger with config settings
-pub fn init(enable_file_line_log: bool) {
-    ENABLE_FILE_LINE_LOG.store(enable_file_line_log, Ordering::Relaxed);
-}
-
 /// Internal logging function
 pub fn log_internal(level: LogLevel, message: &str, file: &str, line: u32) {
     use colors::*;
@@ -91,38 +82,29 @@ pub fn log_internal(level: LogLevel, message: &str, file: &str, line: u32) {
     let color = level.color();
     let label = level.label();
 
-    let show_file_line = ENABLE_FILE_LINE_LOG.load(Ordering::Relaxed);
+    let filename = file
+        .split('/')
+        .last()
+        .or_else(|| file.split('\\').last())
+        .unwrap_or(file);
 
-    if show_file_line {
-        let filename = file
-            .split('/')
-            .last()
-            .or_else(|| file.split('\\').last())
-            .unwrap_or(file);
-
-        println!(
-            "{}{}{}{} {}{}{}:{}{} {}{}[{}]{} {}",
-            UNDERLINE,
-            BRIGHT_BLACK,
-            timestamp,
-            RESET,
-            UNDERLINE,
-            BRIGHT_BLACK,
-            filename,
-            line,
-            RESET,
-            BOLD,
-            color,
-            label,
-            RESET,
-            message
-        );
-    } else {
-        println!(
-            "{}{}{}{} {}{}[{}]{} {}",
-            UNDERLINE, BRIGHT_BLACK, timestamp, RESET, BOLD, color, label, RESET, message
-        );
-    }
+    println!(
+        "{}{}{}{} {}{}{}:{}{} {}{}[{}]{} {}",
+        UNDERLINE,
+        BRIGHT_BLACK,
+        timestamp,
+        RESET,
+        UNDERLINE,
+        BRIGHT_BLACK,
+        filename,
+        line,
+        RESET,
+        BOLD,
+        color,
+        label,
+        RESET,
+        message
+    );
 }
 
 /// Log an info message

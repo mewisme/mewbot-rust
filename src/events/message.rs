@@ -1,5 +1,5 @@
 use crate::context::BotContext;
-use crate::permissions::{get_permission_level, has_permission, PermissionLevel};
+use crate::permissions::{get_permission_level, has_permission, required_permission_message};
 use crate::utils;
 use serenity::model::channel::Message;
 use serenity::model::permissions::Permissions;
@@ -48,7 +48,7 @@ pub async fn message(ctx: Context, msg: Message, bot_context: &BotContext) {
         };
         let permission_data = match ctx.cache.guild(guild_id) {
             Some(guild) => {
-                let owner_id = guild.owner_id;
+                let guild_owner_id = guild.owner_id;
                 let has_admin = guild
                     .members
                     .get(&msg.author.id)
@@ -64,11 +64,11 @@ pub async fn message(ctx: Context, msg: Message, bot_context: &BotContext) {
                         .as_ref()
                         .and_then(|pm| pm.permissions.as_ref())
                         .map_or(false, |p| p.contains(Permissions::ADMINISTRATOR));
-                Some((owner_id, has_admin))
+                Some((guild_owner_id, has_admin))
             }
             None => None,
         };
-        let (owner_id, has_administrator) = match permission_data {
+        let (guild_owner_id, has_administrator) = match permission_data {
             Some((o, h)) => (o, h),
             None => {
                 utils::send_error_message(&msg, &ctx, "Could not load server information.")
@@ -76,13 +76,9 @@ pub async fn message(ctx: Context, msg: Message, bot_context: &BotContext) {
                 return;
             }
         };
-        let user_level = get_permission_level(owner_id, msg.author.id, has_administrator);
+        let user_level = get_permission_level(guild_owner_id, msg.author.id, has_administrator);
         if !has_permission(user_level, required) {
-            let required_str = match required {
-                PermissionLevel::Owner => "server owner",
-                PermissionLevel::Admin => "server admin or owner",
-                PermissionLevel::Member => "member",
-            };
+            let required_str = required_permission_message(required);
             utils::send_error_message(
                 &msg,
                 &ctx,

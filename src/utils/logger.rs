@@ -2,7 +2,6 @@
 
 use chrono::Local;
 
-/// ANSI color codes
 mod colors {
     pub const RESET: &str = "\x1b[0m";
     pub const BOLD: &str = "\x1b[1m";
@@ -27,7 +26,6 @@ mod colors {
     pub const BRIGHT_WHITE: &str = "\x1b[97m";
 }
 
-/// Log levels with associated colors
 #[derive(Debug, Clone, Copy)]
 pub enum LogLevel {
     Info,
@@ -60,13 +58,11 @@ impl LogLevel {
     }
 }
 
-/// Format timestamp as HH:MM:SS
 fn format_timestamp() -> String {
     let now = Local::now();
     now.format("%H:%M:%S").to_string()
 }
 
-/// Get the location (file:line) from the caller
 #[macro_export]
 macro_rules! log_location {
     () => {
@@ -74,7 +70,6 @@ macro_rules! log_location {
     };
 }
 
-/// Internal logging function
 pub fn log_internal(level: LogLevel, message: &str, file: &str, line: u32) {
     use colors::*;
 
@@ -107,7 +102,6 @@ pub fn log_internal(level: LogLevel, message: &str, file: &str, line: u32) {
     );
 }
 
-/// Log an info message
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
@@ -120,7 +114,6 @@ macro_rules! info {
     };
 }
 
-/// Log an error message
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
@@ -133,7 +126,6 @@ macro_rules! error {
     };
 }
 
-/// Log a warning message
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
@@ -146,7 +138,6 @@ macro_rules! warn {
     };
 }
 
-/// Log a debug message
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -159,7 +150,6 @@ macro_rules! debug {
     };
 }
 
-/// Log a done message
 #[macro_export]
 macro_rules! done {
     ($($arg:tt)*) => {

@@ -67,6 +67,8 @@ async fn main() -> Result<()> {
     let config = Config::load()?;
     crate::done!("Configuration loaded successfully");
 
+    permissions::init_bot_owner_id(config.admin_user_id.map(serenity::model::id::UserId::new));
+
     let registry = Registry::new();
 
     let bot_context = Arc::new(BotContext::new(config.clone(), registry));

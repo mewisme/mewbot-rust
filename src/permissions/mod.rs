@@ -1,17 +1,21 @@
 //! Permission hierarchy: Owner > Admin > Member.
-//! - **Owner**: guild owner (from Discord).
-//! - **Admin**: user has `Permissions::ADMINISTRATOR` (server admin / co-admin, same level).
+//! - **Owner**: bot owner (from config ADMIN_USER_ID); can use all commands in every server.
+//! - **Admin**: server admin (guild owner or has `Permissions::ADMINISTRATOR` in that guild only).
 //! - **Member**: everyone else.
 
 use serenity::model::id::UserId;
+use std::sync::OnceLock;
+
+static BOT_OWNER_ID: OnceLock<Option<UserId>> = OnceLock::new();
+
+pub fn init_bot_owner_id(id: Option<UserId>) {
+    let _ = BOT_OWNER_ID.set(id);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionLevel {
-    /// Guild owner (highest).
     Owner,
-    /// User has Administrator permission (server admin / co-admin; same level).
     Admin,
-    /// Regular member (lowest).
     Member,
 }
 
@@ -37,26 +41,33 @@ impl Ord for PermissionLevel {
     }
 }
 
-/// Returns the user's permission level in the guild.
-/// - If `owner_id == user_id` → Owner.
-/// - Else if `has_administrator` (user has `Permissions::ADMINISTRATOR`) → Admin.
-/// - Else → Member.
 pub fn get_permission_level(
-    owner_id: UserId,
+    guild_owner_id: UserId,
     user_id: UserId,
     has_administrator: bool,
 ) -> PermissionLevel {
-    if owner_id == user_id {
+    if BOT_OWNER_ID
+        .get()
+        .and_then(|o| *o)
+        .map_or(false, |bot_owner| bot_owner == user_id)
+    {
         return PermissionLevel::Owner;
     }
-    if has_administrator {
+    if guild_owner_id == user_id || has_administrator {
         return PermissionLevel::Admin;
     }
     PermissionLevel::Member
 }
 
-/// Returns true if `user_level` is at least `required` (owner > admin > member).
 #[inline]
 pub fn has_permission(user_level: PermissionLevel, required: PermissionLevel) -> bool {
     user_level >= required
+}
+
+pub fn required_permission_message(required: PermissionLevel) -> &'static str {
+    match required {
+        PermissionLevel::Owner => "bot owner",
+        PermissionLevel::Admin => "server admin",
+        PermissionLevel::Member => "member",
+    }
 }

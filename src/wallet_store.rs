@@ -8,24 +8,32 @@ const WALLET_FILE: &str = "data/wallet.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserWallet {
-    /// Balance: min 0, max u64::MAX (18,446,744,073,709,551,615)
     pub balance: u64,
     #[serde(default)]
     pub updated_at: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletData {
     pub users: HashMap<String, UserWallet>,
+    #[serde(default)]
+    pub unit: String,
+}
+
+impl Default for WalletData {
+    fn default() -> Self {
+        Self {
+            users: HashMap::new(),
+            unit: String::new(),
+        }
+    }
 }
 
 impl WalletData {
-    /// Returns true if the user has been initialized (has an entry in wallet).
     pub fn has_user(&self, user_id: u64) -> bool {
         self.users.contains_key(&user_id.to_string())
     }
 
-    /// Returns balance only if user is initialized; does not create entry. Min 0, max u64::MAX.
     pub fn get_balance_if_exists(&self, user_id: u64) -> Option<u64> {
         self.users.get(&user_id.to_string()).map(|u| u.balance)
     }
@@ -41,7 +49,6 @@ impl WalletData {
             .balance
     }
 
-    /// Add amount (clamped to 0..=u64::MAX). Balance never exceeds u64::MAX.
     pub fn add_balance(&mut self, user_id: u64, amount: i64, now_iso: &str) -> u64 {
         let amount = amount.max(0) as u64;
         let entry = self
@@ -56,7 +63,6 @@ impl WalletData {
         entry.balance
     }
 
-    /// Subtract amount (min balance 0). Fails if insufficient balance.
     pub fn subtract_balance(&mut self, user_id: u64, amount: i64, now_iso: &str) -> Result<u64, String> {
         let amount = amount.max(0) as u64;
         let entry = self
@@ -74,7 +80,6 @@ impl WalletData {
         Ok(entry.balance)
     }
 
-    /// Initialize user wallet with given balance (create or reset). Min 0, max u64::MAX.
     pub fn init_user(&mut self, user_id: u64, balance: i64, now_iso: &str) {
         let balance = balance.max(0) as u64;
         self.users.insert(
@@ -86,7 +91,6 @@ impl WalletData {
         );
     }
 
-    /// Initialize user wallet only if not already present; returns true if created.
     pub fn init_user_if_new(&mut self, user_id: u64, balance: i64, now_iso: &str) -> bool {
         let key = user_id.to_string();
         if self.users.contains_key(&key) {
@@ -125,5 +129,4 @@ pub async fn save_wallet(data: &WalletData) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Global lock for wallet file to avoid concurrent read/write.
 pub static WALLET_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());

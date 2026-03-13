@@ -29,7 +29,6 @@ pub trait Command: Send + Sync {
         Duration::from_secs(3)
     }
 
-    /// Minimum permission level required to run this command. `None` = any member.
     fn required_permission_level(&self) -> Option<PermissionLevel> {
         None
     }

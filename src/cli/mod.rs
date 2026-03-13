@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 #[derive(Parser)]
-#[command(name = "discord-bot-rust")]
+#[command(name = "mewbot")]
 #[command(about = "A production-grade Discord bot built with Rust", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
@@ -27,7 +27,6 @@ pub enum Commands {
 }
 
 pub fn generate_command(name: &str) -> Result<(), anyhow::Error> {
-    // Validate command name (alphanumeric and underscores only)
     if !name.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return Err(anyhow::anyhow!(
             "Command name must contain only alphanumeric characters and underscores"
@@ -134,38 +133,31 @@ pub fn create() -> Arc<dyn Command> {{
     fs::write(&file_path, template)?;
     crate::done!("Generated command file: {}", file_path.display());
 
-    // Automatically add mod declaration to commands/mod.rs
     let mod_rs_path = Path::new("src/commands/mod.rs");
     if mod_rs_path.exists() {
         let mod_rs_content = fs::read_to_string(mod_rs_path)?;
         let mod_line = format!("pub mod {};", name);
 
-        // Check if module is already declared
         if !mod_rs_content.contains(&mod_line) {
             let lines: Vec<&str> = mod_rs_content.lines().collect();
             let mut new_lines = Vec::new();
             let mut inserted = false;
 
-            // Find the last mod declaration and insert after it
             for (idx, line) in lines.iter().enumerate() {
                 new_lines.push(*line);
 
-                // Check if this is a mod declaration
                 if line.trim().starts_with("pub mod ") {
-                    // Check if this is the last mod declaration
                     let is_last_mod = lines[idx + 1..]
                         .iter()
                         .all(|l| !l.trim().starts_with("pub mod "));
 
                     if is_last_mod && !inserted {
-                        // Insert the new mod declaration after this one
                         new_lines.push(&mod_line);
                         inserted = true;
                     }
                 }
             }
 
-            // If we didn't insert (no mod declarations found), add at the end
             if !inserted {
                 new_lines.push(&mod_line);
             }
@@ -178,39 +170,31 @@ pub fn create() -> Arc<dyn Command> {{
         }
     }
 
-    // Automatically add registration to utils::register_commands
     let utils_rs_path = Path::new("src/utils/mod.rs");
     if utils_rs_path.exists() {
         let utils_content = fs::read_to_string(utils_rs_path)?;
         let reg_line = format!("    registry.register({}::create());", name);
 
-        // Check if registration is already present
         if !utils_content.contains(&reg_line) {
             let lines: Vec<&str> = utils_content.lines().collect();
             let mut new_lines = Vec::new();
             let mut inserted = false;
 
-            // Find the register_commands function and insert after the last registry.register() call
-            // but before the help command registration
             for (idx, line) in lines.iter().enumerate() {
                 new_lines.push(*line);
 
-                // Look for registry.register() calls
                 if line.trim().starts_with("registry.register(") && !line.contains("help::create") {
-                    // Check if this is the last regular registration (before help command)
                     let is_last_reg = lines[idx + 1..].iter().any(|l| {
                         l.contains("help::create") || l.trim().starts_with("// Help command")
                     });
 
                     if is_last_reg && !inserted {
-                        // Insert the new registration after this one
                         new_lines.push(&reg_line);
                         inserted = true;
                     }
                 }
             }
 
-            // If we didn't insert (no registrations found), add after the function start
             if !inserted {
                 let mut final_lines = Vec::new();
                 let mut in_function = false;
@@ -223,7 +207,6 @@ pub fn create() -> Arc<dyn Command> {{
                         && line.trim().starts_with("// Register all commands")
                         && !inserted
                     {
-                        // Insert after the comment
                         final_lines.push(&reg_line);
                         inserted = true;
                     }
@@ -256,7 +239,7 @@ fn capitalize_first(s: &str) -> String {
 
 pub fn show_version() {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    crate::info!("Discord Bot Rust v{}", VERSION);
+    crate::info!("Mewbot v{}", VERSION);
 }
 
 pub fn show_config(key: &str) -> Result<(), anyhow::Error> {

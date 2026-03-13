@@ -1,6 +1,6 @@
 # Discord Bot (Rust)
 
-A Discord bot built with Rust using the Serenity framework. It supports both slash commands and prefix commands, with per-command cooldowns, a permission hierarchy (owner, admin, member), and a dynamic help system.
+A Discord bot built with Rust using the Serenity framework. It supports both slash commands and prefix commands, per-command cooldowns, a permission hierarchy (bot owner, server admin, member), and a dynamic help system.
 
 **Author:** Mew
 
@@ -8,10 +8,10 @@ A Discord bot built with Rust using the Serenity framework. It supports both sla
 
 - Unified command model: same commands work as slash and prefix
 - Automatic slash command registration with Discord
-- Per-user, per-command cooldown (configurable admin bypass via `ADMIN_USER_ID`)
-- Permission hierarchy: owner > admin/co-admin > member (admin determined by Discord Administrator permission)
-- Dynamic help command generated from registered commands
-- Wallet command with check, add, remove, and init (JSON-backed)
+- Per-user, per-command cooldown (bot owner bypass via `ADMIN_USER_ID`)
+- Permission hierarchy: **bot owner** (all servers) > **server admin** (per server) > member
+- Dynamic help: `help` lists commands; `help <command>` shows detailed usage (slash, prefix, aliases, cooldown, permission)
+- Wallet command: check, credit, debit, init, reset (JSON-backed); user mentions in messages (no ping)
 - Modular layout with clear separation of concerns
 
 ## Prerequisites
@@ -54,15 +54,15 @@ Environment variables:
 
 - `DISCORD_TOKEN` – Discord bot token (required)
 - `COMMAND_PREFIX` – Prefix for text commands (default: `m/`)
-- `ADMIN_USER_ID` – Optional user ID that bypasses cooldowns
+- `ADMIN_USER_ID` – User ID of the **bot owner**. This user can use all commands in every server (including ones they don’t own) and bypasses cooldowns. Optional but recommended.
 
-### Permission hierarchy (owner > admin > member)
+### Permission hierarchy (bot owner > server admin > member)
 
-- **Owner** – The guild owner (from Discord). Highest level.
-- **Admin** – Users with the **Administrator** permission (server admin and co-admin; same level).
+- **Bot owner** – The user whose ID is set in `ADMIN_USER_ID`. Can use every command in **any server**. Highest level.
+- **Server admin** – Guild owner or users with the **Administrator** permission **in that server only**. Can use admin-only commands only within that server.
 - **Member** – All other users.
 
-Admin is determined using Discord’s permission system (e.g. `Guild::user_permissions_in` and `Permissions::ADMINISTRATOR`). The bot relies on cached guild and member data, so the **Server Members Intent** (`GUILD_MEMBERS`) must be enabled under your application’s Bot settings in the [Discord Developer Portal](https://discord.com/developers/applications) (Privileged Gateway Intents).
+The bot uses cached guild and member data for permission checks, so enable the **Server Members Intent** (`GUILD_MEMBERS`) in the [Discord Developer Portal](https://discord.com/developers/applications) (Bot → Privileged Gateway Intents).
 
 Commands can require a minimum level via `required_permission_level()` on the Command trait. If unset, the command is available to all members.
 
@@ -90,20 +90,30 @@ cargo run -- config <key>
 
 ### Usage
 
-**Slash commands**
+**Slash commands** – Type `/` in Discord (e.g. `/help`, `/wallet`).
 
-- Type `/` in Discord to list commands (e.g. `/help`, `/wallet`).
+**Prefix commands** – Use the configured prefix plus the command name (e.g. `m/help`, `m/wallet`). Aliases (e.g. `m/w`, `m/bal` for wallet) work when defined.
 
-**Prefix commands**
+### Help command
 
-- Use the configured prefix plus the command name (e.g. `m/help`, `m/wallet`). Aliases (e.g. `m/w`, `m/bal` for wallet) work when defined.
+- **`/help`** or **`m/help`** (aliases: `m/h`, `m/commands`) – Lists all available commands with short descriptions.
+- **`/help <command>`** or **`m/help <command>`** – Shows detailed help for one command:
+  - **Description** – What the command does.
+  - **Slash** – Slash usage (e.g. `/wallet`).
+  - **Prefix** – Prefix usage (e.g. `m/wallet`).
+  - **Aliases** – Other ways to call it (e.g. `m/w`, `m/bal`, `m/balance`).
+  - **Cooldown** – Seconds between uses.
+  - **Permission** – Who can use it (any member, server admin, or bot owner).
+
+Example: `m/help wallet` or `/help command:wallet` for full wallet help.
 
 ### Wallet command
 
-- **check** (default) – View balance. No mention: your own wallet. With mention(s): those users’ wallets (multiple allowed). Only **owner** or **admin/co-admin** can view others’ wallets; **members** can only view their own.
-- **add** / **credit** – Add balance. **Owner** or **admin/co-admin** only. No mention: add to yourself; with mention(s): add to those users (multi-mention supported).
-- **remove** / **debit** – Subtract balance. Same permission and usage pattern as **add**.
-- **init** – Initialize wallet(s) with balance 0. **Owner** or **admin/co-admin** only. With mention(s): init only those users. **No mentions: init all non-bot members in the server** (uses cached member list). Use to create or reset wallets to 0.
+- **check** (default) – View balance. No user option: your wallet. With user/mention(s): those users’ wallets. Only **bot owner** or **server admin** can view others’ wallets; members can only view their own. Balances and user names use mentions (no ping).
+- **credit** – Add balance. **Bot owner** or **server admin** only. Optional user; default self.
+- **debit** – Remove balance. Same permission and user rules as credit.
+- **init** – Initialize wallet(s), default balance 0. **Bot owner** or **server admin** only. Optional user; **no user = init all non-bot members** in the server (cached member list).
+- **reset** – Set wallet(s) to a given balance. Same permission and user rules as init.
 
 Data is stored in `data/wallet.json` (JSON, keyed by user ID).
 
@@ -266,7 +276,7 @@ src/
 
 ### Help
 
-The help command uses the registry to list commands and show details (name, description, prefix, aliases, cooldown) for one or all commands.
+The help command uses the registry to list commands. With no argument it shows all commands and a short description. With a command name (e.g. `help wallet`) it shows detailed info in a structured embed: description, slash usage, prefix usage, aliases, cooldown, and required permission level.
 
 ## Troubleshooting
 

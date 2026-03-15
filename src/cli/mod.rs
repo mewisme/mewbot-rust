@@ -48,6 +48,7 @@ pub fn generate_command(name: &str) -> Result<(), anyhow::Error> {
 
     let template = format!(
         r#"use crate::commands::Command;
+use crate::permissions::PermissionLevel;
 use async_trait::async_trait;
 use serenity::builder::{{
     CreateCommand,
@@ -119,6 +120,10 @@ impl Command for {0} {{
 
     fn cooldown_duration(&self) -> Duration {{
         Duration::from_secs(3)
+    }}
+
+    fn required_permission_level(&self) -> Option<PermissionLevel> {{
+        None
     }}
 }}
 

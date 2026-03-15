@@ -17,6 +17,7 @@ use context::BotContext;
 use registry::Registry;
 use serenity::model::gateway::GatewayIntents;
 use serenity::prelude::*;
+use std::io::{self, Write};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -47,6 +48,7 @@ impl EventHandler for Handler {
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
+    dotenv::dotenv().ok();
 
     let cli = Cli::parse();
 
@@ -67,7 +69,12 @@ async fn main() -> Result<()> {
         }
     }
 
-    crate::info!("Bot version: v{}", env!("CARGO_PKG_VERSION"));
+    let _ = io::stdout().flush();
+    crate::info!("Bot version: v{}", updater::current_version());
+    crate::info!("Author: {}", env!("CARGO_PKG_AUTHORS"));
+    if std::env::var("MEWBOT_JUST_UPDATED").is_ok() {
+        crate::done!("Updated and relaunched successfully");
+    }
 
     let config = Config::load()?;
     crate::done!("Configuration loaded successfully");
@@ -96,6 +103,20 @@ async fn main() -> Result<()> {
         .await?;
 
     let shard_manager = client.shard_manager.clone();
+    if let Ok(release) = updater::fetch_latest().await {
+        if let Some(asset) = updater::find_asset_for_current_platform(&release.files) {
+            if updater::is_newer(&updater::current_version(), &release.version) {
+                crate::info!("New version {} available, updating...", release.version);
+                if updater::run_update(&release, asset, shard_manager.shutdown_all())
+                    .await
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
     tokio::spawn(async move {
         loop {
             sleep(Duration::from_secs(60)).await;
@@ -107,7 +128,7 @@ async fn main() -> Result<()> {
                 Some(a) => a,
                 None => continue,
             };
-            if !updater::is_newer(env!("CARGO_PKG_VERSION"), &release.version) {
+            if !updater::is_newer(&updater::current_version(), &release.version) {
                 continue;
             }
             crate::info!("New version {} available, updating...", release.version);

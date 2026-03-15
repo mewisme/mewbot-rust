@@ -201,6 +201,7 @@ jobs:
           done
 
           cp latest.json release-assets/
+          cp .env.example release-assets/
           ls -la release-assets/
 
       - name: Create Git tag if missing

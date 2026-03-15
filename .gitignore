@@ -1,4 +1,24 @@
-target
+# Build
+/target
+
+# Env and secrets
 .env
-data
+.env.*.local
+
+# Runtime data (keep src/core/data module)
+/data
+!src/core/data
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDE
 .cursor
+.idea
+*.swp
+*.swo
+*.rs.bk
+
+# Debug
+*.pdb

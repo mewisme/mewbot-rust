@@ -1,8 +1,8 @@
+use crate::core::data_file;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
 
-const WALLET_FILE: &str = "data/wallet.json";
+const WALLET_FILE: &str = "wallet.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserWallet {
@@ -107,24 +107,17 @@ impl WalletData {
 }
 
 pub async fn load_wallet() -> WalletData {
-    let path = Path::new(WALLET_FILE);
-    if !path.exists() {
-        return WalletData::default();
-    }
-    match tokio::fs::read_to_string(path).await {
-        Ok(s) => serde_json::from_str(&s).unwrap_or_else(|_| WalletData::default()),
-        Err(_) => WalletData::default(),
+    match data_file::load(WALLET_FILE).await {
+        Ok(s) if !s.is_empty() => {
+            serde_json::from_str(&s).unwrap_or_else(|_| WalletData::default())
+        }
+        _ => WalletData::default(),
     }
 }
 
 pub async fn save_wallet(data: &WalletData) -> anyhow::Result<()> {
-    let path = Path::new(WALLET_FILE);
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
     let s = serde_json::to_string_pretty(data)?;
-    tokio::fs::write(path, s).await?;
-    Ok(())
+    data_file::save(WALLET_FILE, &s).await
 }
 
 pub static WALLET_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());

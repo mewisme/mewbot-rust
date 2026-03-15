@@ -6,7 +6,7 @@ A Discord bot built with Rust using the Serenity framework. It uses a **core + p
 
 ## Features
 
-- **Core + plugins** – Commands live in `src/plugins/<name>/`; core provides config, registry, permissions, and a limited plugin API.
+- **Core + plugins** – Commands live in `src/plugins/<name>/`; core provides config, registry, permissions, data file I/O (in `data/`), and a limited plugin API.
 - **Unified command model** – Same commands work as slash and prefix.
 - **Automatic slash registration** – Slash commands are registered with Discord on ready.
 - **Per-user, per-command cooldown** – Bot owner bypass via `ADMIN_USER_ID`.
@@ -112,7 +112,7 @@ cargo run -- config <key>
 - **reset** – Set wallet(s) to a given balance. Same permission and user rules as init.
 - **unit** – Set display unit for balances (e.g. "xu"). Same permission.
 
-Data is stored in `data/wallet.json`.
+Data is stored in `data/wallet.json`. All plugin file I/O goes through core’s **data folder**: see *Data files* below.
 
 ## Adding new commands (plugins)
 
@@ -133,6 +133,8 @@ Then edit `src/plugins/mycommand/command.rs` to implement your logic. The CLI al
 
 Plugins can use `crate::core::permissions` for permission checks. The help plugin uses `PluginApi` (config + command_lister); other plugins usually only need the trait and permissions.
 
+**Data files** – Core reads and writes files only in the `data/` directory. Plugins provide just a filename (e.g. `wallet.json`); paths are resolved as `data/<filename>`. Use `crate::core::data_file::load(filename)` and `data_file::save(filename, contents)` for async string I/O. Subpaths (e.g. `plugins/wallet.json`) are allowed; the directory is created on save.
+
 ## Source code structure
 
 ```
@@ -142,21 +144,30 @@ src/
 │   └── mod.rs              # CLI: generate-plugin, version, config
 ├── core/
 │   ├── mod.rs              # Re-exports (Command, Config, PluginApi, Registry, etc.)
-│   ├── config.rs           # Config from environment
-│   ├── context.rs          # BotContext (config, registry, cooldowns)
-│   ├── registry.rs         # Registry + RegistryCommandLister (for help)
-│   ├── command.rs          # Command trait, SubCommandInfo, CommandInfo, CommandLister
-│   ├── permissions.rs      # Owner/Admin/Member and helpers
-│   ├── plugin_api.rs      # PluginApi (config + command_lister)
+│   ├── command/            # Command trait, SubCommandInfo, CommandInfo, CommandLister
+│   │   └── mod.rs
+│   ├── config/             # Config from environment
+│   │   └── mod.rs
+│   ├── context/            # BotContext (config, registry, cooldowns)
+│   │   └── mod.rs
+│   ├── data/               # Load/save files in data/ (plugins pass filename only)
+│   │   └── mod.rs
 │   ├── events/
 │   │   ├── mod.rs
-│   │   ├── ready.rs       # Register slash commands with Discord
-│   │   ├── message.rs     # Prefix command dispatch
-│   │   └── interaction.rs # Slash command dispatch
-│   ├── utils/
-│   │   ├── mod.rs         # Formatting, send_error_message, etc.
-│   │   └── logger.rs      # Logging macros (info!, done!, error!, warn!)
-│   └── updater.rs         # Auto-update from GitHub releases
+│   │   ├── ready.rs        # Register slash commands with Discord
+│   │   ├── message.rs      # Prefix command dispatch
+│   │   └── interaction.rs  # Slash command dispatch
+│   ├── permissions/        # Owner/Admin/Member and helpers
+│   │   └── mod.rs
+│   ├── plugin_api/        # PluginApi (config + command_lister)
+│   │   └── mod.rs
+│   ├── registry/           # Registry + RegistryCommandLister (for help)
+│   │   └── mod.rs
+│   ├── updater/            # Auto-update from GitHub releases
+│   │   └── mod.rs
+│   └── utils/
+│       ├── mod.rs          # Formatting, send_error_message, etc.
+│       └── logger.rs       # Logging macros (info!, done!, error!, warn!)
 └── plugins/
     ├── mod.rs             # register_commands(registry, api); loads wallet then help
     ├── help/
@@ -165,10 +176,10 @@ src/
     └── wallet/
         ├── mod.rs
         ├── command.rs     # Wallet slash + prefix (check, credit, debit, init, reset, unit)
-        └── store.rs       # Wallet JSON load/save (data/wallet.json)
+        └── store.rs       # Wallet data via core data_file (filename: wallet.json)
 ```
 
-- **core** – Config, registry, context, command trait, permissions, plugin API, events, utils, updater. Plugins depend only on the public API and permissions.
+- **core** – Config, registry, context, command trait, permissions, plugin API, **data_file** (I/O in `data/`), events, utils, updater. Plugins depend only on the public API and permissions.
 - **plugins** – Each plugin is a folder (e.g. `wallet/`) with `mod.rs`, `command.rs`, and optional files (e.g. `store.rs`). Registered in `plugins::register_commands`; help is registered last so it can list all commands.
 
 ## How it works

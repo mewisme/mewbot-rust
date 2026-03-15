@@ -1,12 +1,15 @@
 pub mod command;
 pub mod config;
 pub mod context;
+pub mod data;
 pub mod events;
 pub mod permissions;
 pub mod plugin_api;
 pub mod registry;
 pub mod updater;
 pub mod utils;
+
+pub use data as data_file;
 
 pub use command::{Command, CommandInfo, CommandLister, SubCommandInfo};
 pub use config::Config;

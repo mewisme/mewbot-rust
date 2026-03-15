@@ -171,13 +171,11 @@ jobs:
 
           jq -n \
             --arg version "$VERSION" \
-            --arg current_version "$VERSION" \
             --arg tag "$TAG" \
             --arg published_at "$PUBLISHED_AT" \
             --arg repo "$REPO" \
             --argjson files "$FILES_JSON" \
             '{
-              currentVersion: $current_version,
               version: $version,
               tag: $tag,
               publishedAt: $published_at,

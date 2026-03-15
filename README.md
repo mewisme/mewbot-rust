@@ -61,11 +61,11 @@ Enable **Server Members Intent** (Bot → Privileged Gateway Intents) in the Dis
 
 ## Scripts
 
-- **`scripts/update-version.ps1`** – Cập nhật phiên bản trong `Cargo.toml`. Tham số: phiên bản cụ thể (vd. `1.2.3`) hoặc `major` / `minor` / `patch` để tăng tương ứng.
+- **`scripts/update-version.ps1`** – Update the package version in `Cargo.toml`. Argument: an exact semver (e.g. `1.2.3`) or `major` / `minor` / `patch` to bump the current version.
 
   ```powershell
-  .\scripts\update-version.ps1 patch    # 0.3.4 -> 0.3.5
-  .\scripts\update-version.ps1 minor   # 0.3.4 -> 0.4.0
+  .\scripts\update-version.ps1 patch   # 0.3.4 -> 0.3.5
+  .\scripts\update-version.ps1 minor  # 0.3.4 -> 0.4.0
   .\scripts\update-version.ps1 major   # 0.3.4 -> 1.0.0
   .\scripts\update-version.ps1 1.0.0   # set exact version
   ```

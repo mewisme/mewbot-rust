@@ -106,13 +106,15 @@ async fn main() -> Result<()> {
     if let Ok(release) = updater::fetch_latest().await {
         if let Some(asset) = updater::find_asset_for_current_platform(&release.files) {
             if updater::is_newer(&updater::current_version(), &release.version) {
-                crate::info!("New version {} available, updating...", release.version);
+                crate::info!("New version {} available, updating", release.version);
                 if updater::run_update(&release, asset, shard_manager.shutdown_all())
                     .await
                     .is_ok()
                 {
                     return Ok(());
                 }
+            } else {
+                crate::done!("Bot is up to date !");
             }
         }
     }
@@ -131,7 +133,7 @@ async fn main() -> Result<()> {
             if !updater::is_newer(&updater::current_version(), &release.version) {
                 continue;
             }
-            crate::info!("New version {} available, updating...", release.version);
+            crate::info!("New version {} available, updating", release.version);
             if let Err(e) = updater::run_update(&release, asset, shard_manager.shutdown_all()).await
             {
                 crate::error!("Update failed: {:?}", e);

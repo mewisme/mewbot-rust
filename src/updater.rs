@@ -59,7 +59,14 @@ pub fn find_asset_for_current_platform(files: &[FileEntry]) -> Option<&FileEntry
 }
 
 pub fn current_version() -> String {
-    env::var("BOT_VERSION").unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string())
+    if cfg!(debug_assertions) {
+        env::var("BOT_VERSION")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string())
+    } else {
+        env!("CARGO_PKG_VERSION").to_string()
+    }
 }
 
 pub fn is_newer(current: &str, remote: &str) -> bool {
@@ -130,7 +137,7 @@ where
     Fut: std::future::Future<Output = ()>,
 {
     let url = download_url(&release.download_url_template, &asset.name);
-    crate::info!("Downloading {}...", asset.name);
+    crate::info!("Downloading {}", asset.name);
     let temp_path = download_to_temp(&url)
         .await
         .context("download new binary")?;

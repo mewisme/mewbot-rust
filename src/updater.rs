@@ -134,14 +134,28 @@ where
     let temp_path = download_to_temp(&url)
         .await
         .context("download new binary")?;
-    if let Err(e) = verify_sha256(&temp_path, &asset.sha256) {
-        let _ = fs::remove_file(&temp_path);
+    let binary_name = if cfg!(target_os = "windows") {
+        "mewbot.exe"
+    } else {
+        "mewbot"
+    };
+    let new_path = temp_path
+        .parent()
+        .context("temp path has no parent")?
+        .join(binary_name);
+    if new_path != temp_path {
+        let _ = fs::remove_file(&new_path);
+        fs::rename(&temp_path, &new_path).context("rename to mewbot binary")?;
+    }
+    let update_path = new_path;
+    if let Err(e) = verify_sha256(&update_path, &asset.sha256) {
+        let _ = fs::remove_file(&update_path);
         return Err(e).context("verify sha256");
     }
     shutdown.await;
     let current_exe = env::current_exe().context("current exe path")?;
-    self_replace::self_replace(&temp_path).context("replace executable")?;
-    let _ = fs::remove_file(&temp_path);
+    self_replace::self_replace(&update_path).context("replace executable")?;
+    let _ = fs::remove_file(&update_path);
     let args: Vec<String> = env::args().skip(1).collect();
     let mut cmd = Command::new(&current_exe);
     cmd.args(&args)

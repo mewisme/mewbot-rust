@@ -10,6 +10,9 @@ on:
         description: 'Version (e.g. 0.2.1). Leave empty to use Cargo.toml version.'
         required: false
 
+permissions:
+  contents: write  # read + write (push tags, create releases, upload assets)
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -123,8 +126,6 @@ jobs:
     needs: [prepare, build]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Download all build artifacts
         uses: actions/download-artifact@v4

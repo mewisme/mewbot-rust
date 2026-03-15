@@ -1,5 +1,6 @@
 use crate::commands::Command;
 use crate::config::Config;
+use crate::permissions::required_permission_message;
 use crate::registry::Registry;
 use async_trait::async_trait;
 use serenity::all::CreateMessage;
@@ -13,6 +14,42 @@ use serenity::prelude::Context;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
+
+fn build_command_embed(prefix: &str, cmd: &dyn Command) -> CreateEmbed {
+    let cooldown = cmd.cooldown_duration().as_secs();
+    let aliases = cmd.aliases();
+    let perm_str = match cmd.required_permission_level() {
+        Some(level) => required_permission_message(level).to_string(),
+        None => "Any member".to_string(),
+    };
+
+    let slash_usage = format!("`/{}`", cmd.name());
+    let prefix_usage = cmd
+        .prefix()
+        .map(|p| format!("`{}{}`", prefix, p))
+        .unwrap_or_else(|| "—".to_string());
+    let aliases_str = if aliases.is_empty() {
+        "—".to_string()
+    } else {
+        aliases
+            .iter()
+            .map(|a| format!("`{}{}`", prefix, a))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    let embed = CreateEmbed::new()
+        .title(format!("Help: {}", cmd.name()))
+        .description(cmd.description())
+        .color(0x0099ff)
+        .field("Slash", slash_usage, true)
+        .field("Prefix", prefix_usage, true)
+        .field("Aliases", aliases_str, false)
+        .field("Cooldown", format!("{} seconds", cooldown), true)
+        .field("Permission", perm_str, true);
+
+    embed
+}
 
 pub struct Help {
     registry: Arc<Mutex<Registry>>,
@@ -71,40 +108,12 @@ impl Command for Help {
 
             if let Some(cmd) = command {
                 let prefix = &self.config.command_prefix;
-                let cooldown = cmd.cooldown_duration().as_secs();
-                let aliases = cmd.aliases();
-
-                let mut description = format!(
-                    "**Description:** {}\n\n**Cooldown:** {} seconds\n\n",
-                    cmd.description(),
-                    cooldown
-                );
-
-                description.push_str(&format!("**Slash Command:** `/{}`\n", cmd.name()));
-
-                if let Some(prefix_cmd) = cmd.prefix() {
-                    description
-                        .push_str(&format!("**Prefix Command:** `{}{}`\n", prefix, prefix_cmd));
-                }
-
-                if !aliases.is_empty() {
-                    let aliases_str: Vec<String> = aliases
-                        .iter()
-                        .map(|a| format!("`{}{}`", prefix, a))
-                        .collect();
-                    description.push_str(&format!("\n**Aliases:** {}", aliases_str.join(", ")));
-                }
-
+                let embed = build_command_embed(prefix, cmd.as_ref());
                 interaction
                     .create_response(
                         &ctx.http,
                         CreateInteractionResponse::Message(
-                            CreateInteractionResponseMessage::new().embed(
-                                CreateEmbed::new()
-                                    .title(format!("Help: {}", cmd.name()))
-                                    .description(&description)
-                                    .color(0x0099ff),
-                            ),
+                            CreateInteractionResponseMessage::new().embed(embed),
                         ),
                     )
                     .await?;
@@ -173,37 +182,8 @@ impl Command for Help {
                 .find(|c| c.name().eq_ignore_ascii_case(cmd_name));
 
             if let Some(cmd) = command {
-                let cooldown = cmd.cooldown_duration().as_secs();
-                let aliases = cmd.aliases();
-
-                let mut description = format!(
-                    "**Description:** {}\n\n**Cooldown:** {} seconds\n\n",
-                    cmd.description(),
-                    cooldown
-                );
-
-                description.push_str(&format!("**Slash Command:** `/{}`\n", cmd.name()));
-
-                if let Some(prefix_cmd) = cmd.prefix() {
-                    description
-                        .push_str(&format!("**Prefix Command:** `{}{}`\n", prefix, prefix_cmd));
-                }
-
-                if !aliases.is_empty() {
-                    let aliases_str: Vec<String> = aliases
-                        .iter()
-                        .map(|a| format!("`{}{}`", prefix, a))
-                        .collect();
-                    description.push_str(&format!("\n**Aliases:** {}", aliases_str.join(", ")));
-                }
-
-                let response = CreateMessage::new().embed(
-                    CreateEmbed::new()
-                        .title(format!("Help: {}", cmd.name()))
-                        .description(description)
-                        .color(0x0099ff),
-                );
-
+                let embed = build_command_embed(prefix, cmd.as_ref());
+                let response = CreateMessage::new().embed(embed);
                 msg.channel_id.send_message(&ctx.http, response).await?;
             } else {
                 let response = CreateMessage::new().embed(

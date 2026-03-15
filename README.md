@@ -1,41 +1,39 @@
-# Discord Bot - Rust
+# Discord Bot (Rust)
 
-A Discord bot built with Rust using the Serenity framework. Supports both slash commands and prefix commands with cooldowns, auto-reload in dev mode, and a dynamic help system.
+A Discord bot built with Rust using the Serenity framework. It supports both slash commands and prefix commands, per-command cooldowns, a permission hierarchy (bot owner, server admin, member), and a dynamic help system.
 
 **Author:** Mew
 
 ## Features
 
-- Unified command model supporting both slash and prefix commands
-- Automatic command registration with Discord
-- Per-user, per-command cooldown system with admin bypass
-- Dynamic help system that auto-generates from registered commands
-- Dev mode with file watching for command changes
-- Modular architecture with clean separation of concerns
+- Unified command model: same commands work as slash and prefix
+- Automatic slash command registration with Discord
+- Per-user, per-command cooldown (bot owner bypass via `ADMIN_USER_ID`)
+- Permission hierarchy: **bot owner** (all servers) > **server admin** (per server) > member
+- Dynamic help: `help` lists commands; `help <command>` shows detailed usage (slash, prefix, aliases, cooldown, permission)
+- Wallet command: check, credit, debit, init, reset (JSON-backed); user mentions in messages (no ping)
+- Modular layout with clear separation of concerns
 
 ## Prerequisites
 
-- Rust toolchain (latest stable version)
-- Discord bot token
-- Discord application ID
+- Rust toolchain (latest stable)
+- Discord bot token and application ID
+- For permission checks and wallet init-all: Server Members Intent enabled in the Discord Developer Portal
 
 ## Setup
 
-1. Create a `.env` file in the root directory:
+1. Create a `.env` file in the project root:
 
 ```env
 DISCORD_TOKEN=your_bot_token_here
 COMMAND_PREFIX=m/
-DEV_MODE=false
 ADMIN_USER_ID=
-ENABLE_FILE_LINE_LOG=true
 ```
 
-2. Get your Discord Bot Token:
-   - Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Get your Discord bot token:
+   - Open the [Discord Developer Portal](https://discord.com/developers/applications)
    - Create or select an application
-   - Navigate to "Bot" section
-   - Copy the token and set as `DISCORD_TOKEN` in `.env`
+   - Go to the "Bot" section and copy the token into `DISCORD_TOKEN` in `.env`
 
 3. Build and run:
 
@@ -54,47 +52,74 @@ cargo run
 
 Environment variables:
 
-- `DISCORD_TOKEN` - Discord bot token (required)
-- `COMMAND_PREFIX` - Prefix for prefix commands (default: `m/`)
-- `DEV_MODE` - Enable dev mode for file watching (default: `false`)
-- `ADMIN_USER_ID` - User ID that bypasses cooldowns (optional)
-- `ENABLE_FILE_LINE_LOG` - Show file:line in log output (default: `true`)
+- `DISCORD_TOKEN` – Discord bot token (required)
+- `COMMAND_PREFIX` – Prefix for text commands (default: `m/`)
+- `ADMIN_USER_ID` – User ID of the **bot owner**. This user can use all commands in every server (including ones they don’t own) and bypasses cooldowns. Optional but recommended.
 
-## CLI Commands
+### Permission hierarchy (bot owner > server admin > member)
 
-Generate a command template:
+- **Bot owner** – The user whose ID is set in `ADMIN_USER_ID`. Can use every command in **any server**. Highest level.
+- **Server admin** – Guild owner or users with the **Administrator** permission **in that server only**. Can use admin-only commands only within that server.
+- **Member** – All other users.
+
+The bot uses cached guild and member data for permission checks, so enable the **Server Members Intent** (`GUILD_MEMBERS`) in the [Discord Developer Portal](https://discord.com/developers/applications) (Bot → Privileged Gateway Intents).
+
+Commands can require a minimum level via `required_permission_level()` on the Command trait. If unset, the command is available to all members.
+
+## CLI commands
+
+Generate a new command template:
 
 ```bash
 cargo run -- generate <command_name>
 ```
 
-Show version:
+Print version:
 
 ```bash
 cargo run -- version
 ```
 
-Show config value:
+Print a config value (from environment):
 
 ```bash
 cargo run -- config <key>
 ```
 
-## Commands
+## Bot commands
 
-### Using Commands
+### Usage
 
-Slash Commands:
-- Type `/` in Discord to see available commands
-- Example: `/help`, `/flashback`
+**Slash commands** – Type `/` in Discord (e.g. `/help`, `/wallet`).
 
-Prefix Commands:
-- Use the configured prefix followed by the command name
-- Example: `m/help`, `m/flashback`
+**Prefix commands** – Use the configured prefix plus the command name (e.g. `m/help`, `m/wallet`). Aliases (e.g. `m/w`, `m/bal` for wallet) work when defined.
 
-## Adding New Commands
+### Help command
 
-### Quick Method
+- **`/help`** or **`m/help`** (aliases: `m/h`, `m/commands`) – Lists all available commands with short descriptions.
+- **`/help <command>`** or **`m/help <command>`** – Shows detailed help for one command:
+  - **Description** – What the command does.
+  - **Slash** – Slash usage (e.g. `/wallet`).
+  - **Prefix** – Prefix usage (e.g. `m/wallet`).
+  - **Aliases** – Other ways to call it (e.g. `m/w`, `m/bal`, `m/balance`).
+  - **Cooldown** – Seconds between uses.
+  - **Permission** – Who can use it (any member, server admin, or bot owner).
+
+Example: `m/help wallet` or `/help command:wallet` for full wallet help.
+
+### Wallet command
+
+- **check** (default) – View balance. No user option: your wallet. With user/mention(s): those users’ wallets. Only **bot owner** or **server admin** can view others’ wallets; members can only view their own. Balances and user names use mentions (no ping).
+- **credit** – Add balance. **Bot owner** or **server admin** only. Optional user; default self.
+- **debit** – Remove balance. Same permission and user rules as credit.
+- **init** – Initialize wallet(s), default balance 0. **Bot owner** or **server admin** only. Optional user; **no user = init all non-bot members** in the server (cached member list).
+- **reset** – Set wallet(s) to a given balance. Same permission and user rules as init.
+
+Data is stored in `data/wallet.json` (JSON, keyed by user ID).
+
+## Adding new commands
+
+### Quick method
 
 Use the CLI generator:
 
@@ -103,14 +128,15 @@ cargo run -- generate mycommand
 ```
 
 Then:
-1. Edit the generated file in `src/commands/mycommand.rs`
-2. Add `pub mod mycommand;` to `src/commands/mod.rs`
-3. Add `registry.register(mycommand::create());` to `register_commands()` in `src/utils/mod.rs`
+
+1. Edit the generated file under `src/commands/mycommand.rs`
+2. Add `pub mod mycommand;` in `src/commands/mod.rs`
+3. Add `registry.register(mycommand::create());` in `register_commands()` in `src/utils/mod.rs`
 4. Rebuild and run
 
-### Manual Method
+### Manual method
 
-1. Create a new file in `src/commands/` (e.g., `mycommand.rs`)
+1. Add a new file under `src/commands/` (e.g. `mycommand.rs`).
 
 2. Implement the `Command` trait:
 
@@ -148,12 +174,14 @@ impl Command for MyCommand {
     ) -> anyhow::Result<()> {
         use serenity::builder::CreateInteractionResponse;
         use serenity::builder::CreateInteractionResponseMessage;
-        
+
         interaction
-            .create_response(&ctx.http, CreateInteractionResponse::Message(
-                CreateInteractionResponseMessage::new()
-                    .content("Response message")
-            ))
+            .create_response(
+                &ctx.http,
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new().content("Response message"),
+                ),
+            )
             .await?;
         Ok(())
     }
@@ -168,10 +196,9 @@ impl Command for MyCommand {
         msg: &Message,
         args: &[&str],
     ) -> anyhow::Result<()> {
+        use serenity::builder::CreateMessage;
         msg.channel_id
-            .send_message(&ctx.http, |m| {
-                m.content("Response message")
-            })
+            .send_message(&ctx.http, CreateMessage::new().content("Response message"))
             .await?;
         Ok(())
     }
@@ -186,141 +213,103 @@ pub fn create() -> Arc<dyn Command> {
 }
 ```
 
-3. Export the command in `src/commands/mod.rs`:
-   - Add `pub mod mycommand;`
-
-4. Register the command in `src/utils/mod.rs`:
-   - Add `registry.register(mycommand::create());` in `register_commands()`
-
+3. In `src/commands/mod.rs`, add: `pub mod mycommand;`
+4. In `src/utils/mod.rs`, inside `register_commands()`, add: `registry.register(mycommand::create());`
 5. Rebuild and run
 
-## Source Code Structure
+## Source code structure
 
 ```
 src/
-├── main.rs                 # Entry point, initializes bot and event handlers
+├── main.rs              # Entry point, client and event handler setup
 ├── cli/
-│   └── mod.rs             # CLI command parsing and handlers
-├── commands/              # Command implementations
-│   ├── mod.rs            # Command trait definition
-│   ├── flashback.rs      # Flashback command
-│   └── help.rs           # Help command
+│   └── mod.rs           # CLI parsing and handlers (generate, version, config)
+├── commands/
+│   ├── mod.rs           # Command trait and command exports
+│   ├── help.rs         # Help command
+│   └── wallet.rs       # Wallet command (check, add, remove, init)
 ├── config/
-│   └── mod.rs            # Configuration loading from .env
+│   └── mod.rs          # Config from environment
 ├── context/
-│   └── mod.rs            # Bot context (registry, cooldowns, config)
-├── events/               # Discord event handlers
-│   ├── mod.rs           # Event handler exports
-│   ├── ready.rs         # Bot ready event (registers slash commands)
-│   ├── message.rs       # Message event (handles prefix commands)
-│   └── interaction.rs   # Interaction event (handles slash commands)
+│   └── mod.rs          # Shared state (registry, cooldowns, config)
+├── events/
+│   ├── mod.rs
+│   ├── ready.rs        # Ready: register slash commands
+│   ├── message.rs      # Prefix command handling
+│   └── interaction.rs  # Slash command handling
+├── permissions/
+│   └── mod.rs          # Permission level (Owner, Admin, Member) and helpers
 ├── registry/
-│   └── mod.rs           # Command registry for storing and retrieving commands
-└── utils/               # Utility functions
-    ├── mod.rs          # Helper functions (formatting, error handling)
-    └── logger.rs       # Custom logging system
+│   └── mod.rs          # Command registry (by name and prefix)
+├── utils/
+│   ├── mod.rs          # Helpers, formatting, command registration
+│   └── logger.rs      # Logging macros
+└── wallet_store.rs     # Wallet JSON load/save and data types
 ```
 
-### Module Descriptions
+### Module overview
 
-**main.rs**
-- Initializes the bot client
-- Sets up event handlers
-- Loads configuration
-- Registers commands
-- Starts the bot
+- **main.rs** – Loads config, builds registry and context, registers commands, starts the client with event handlers.
+- **cli/mod.rs** – Handles CLI subcommands: generate, version, config.
+- **commands/** – Command trait and implementations; each command can define slash and prefix behavior, aliases, and cooldown.
+- **config/mod.rs** – Reads `.env` into a `Config` struct.
+- **context/mod.rs** – Holds registry, config, and per-user cooldown state.
+- **events/** – `ready`: register global slash commands; `message`: dispatch prefix commands; `interaction`: dispatch slash commands and enforce permissions.
+- **permissions/mod.rs** – Defines Owner/Admin/Member and helpers for permission checks using guild cache.
+- **registry/mod.rs** – Registers commands and looks them up by name or prefix (including aliases).
+- **utils/mod.rs** – Formatting, error handling, and `register_commands()`.
+- **wallet_store.rs** – Wallet data (JSON file), load/save, and init/add/remove balance helpers.
 
-**cli/mod.rs**
-- Parses command-line arguments
-- Handles CLI commands (generate, version, config)
+## How it works
 
-**commands/**
-- Defines the `Command` trait that all commands implement
-- Each command file implements both slash and prefix command handlers
-- Commands are registered in `utils/mod.rs`
+### Command registration
 
-**config/mod.rs**
-- Loads configuration from environment variables
-- Provides `Config` struct with all bot settings
+1. Commands live in `src/commands/` and export a `create()` returning `Arc<dyn Command>`.
+2. They are registered in `register_commands()` in `src/utils/mod.rs`.
+3. On startup, the `ready` event registers slash commands with Discord and the in-memory registry is used for both slash and prefix dispatch.
 
-**context/mod.rs**
-- Manages shared bot state
-- Handles cooldown tracking and checking
-- Stores registry and configuration
+### Cooldowns
 
-**events/**
-- `ready.rs`: Handles bot connection, registers slash commands with Discord
-- `message.rs`: Processes prefix commands from messages
-- `interaction.rs`: Processes slash command interactions
+- Cooldowns are per user and per command.
+- Users in `ADMIN_USER_ID` skip cooldowns.
+- If a user is on cooldown, they get a message with the remaining time. After a successful run, cooldown is set; old entries are cleared over time.
 
-**registry/mod.rs**
-- Stores all registered commands in HashMaps
-- Provides fast lookup by command name or prefix
-- Manages command aliases
+### Help
 
-**utils/**
-- `mod.rs`: Utility functions for formatting, error messages, command registration
-- `logger.rs`: Custom logging macros and formatting
-
-## How It Works
-
-### Command Registration
-
-1. Commands are defined in `src/commands/` as separate modules
-2. Each command exports a `create()` function returning `Arc<dyn Command>`
-3. Commands are registered in `register_commands()` in `src/utils/mod.rs`
-4. On bot startup, slash commands are registered with Discord in the `ready` event
-5. The registry stores commands for fast lookup during execution
-
-### Cooldown System
-
-1. When a command executes, the bot checks if the user is on cooldown
-2. Cooldowns are stored per user and per command
-3. Admins (from `ADMIN_USER_ID`) bypass all cooldowns
-4. If on cooldown, user receives an error message with remaining time
-5. After successful execution, a new cooldown timestamp is set
-6. Expired cooldowns are automatically cleaned up
-
-### Help System
-
-The help command dynamically queries the registry:
-1. Calls `registry.all_commands()` to get all registered commands
-2. Accesses command metadata (name, description, prefix, aliases, cooldown)
-3. Formats information into an embed
-4. Shows detailed information for specific commands when requested
-
-## Dev Mode
-
-When `DEV_MODE=true`, the bot watches `src/commands/` for file changes and logs when changes are detected. Note: Full hot-reload requires restarting the bot.
+The help command uses the registry to list commands. With no argument it shows all commands and a short description. With a command name (e.g. `help wallet`) it shows detailed info in a structured embed: description, slash usage, prefix usage, aliases, cooldown, and required permission level.
 
 ## Troubleshooting
 
-Bot doesn't respond to commands:
-- Verify `DISCORD_TOKEN` is correct
-- Ensure bot has necessary permissions
-- Verify `MESSAGE_CONTENT` intent is enabled for prefix commands
-- Check console for error messages
+**Bot does not respond to commands**
 
-Slash commands not appearing:
-- Commands are registered on bot startup
-- May take a few minutes to appear globally
-- Check console for registration errors
+- Check `DISCORD_TOKEN` and bot permissions.
+- For prefix commands, ensure the `MESSAGE_CONTENT` intent is enabled.
+- Check logs for errors.
+
+**Slash commands do not show up**
+
+- Slash commands are registered when the bot becomes ready; global updates can take a short time.
+- Look for registration errors in the console.
+
+**Permission or “init all” issues**
+
+- Enable the Server Members Intent in the Discord Developer Portal (Bot > Privileged Gateway Intents) so the bot can use cached members for permission checks and wallet init-all.
 
 ## Dependencies
 
-- serenity - Discord API wrapper
-- tokio - Async runtime
-- dotenv - Environment variable loading
-- anyhow - Error handling
-- notify - File watching
-- chrono - Time formatting
-- async-trait - Async trait support
-- env_logger - Logging
-- clap - CLI parsing
-- reqwest - HTTP client
+- serenity – Discord API and gateway
+- tokio – Async runtime
+- dotenv – Load `.env`
+- anyhow – Error handling
+- chrono – Time formatting
+- async-trait – Async trait support
+- env_logger – Logging
+- clap – CLI
+- reqwest – HTTP client
+- serde / serde_json – Serialization (e.g. wallet JSON)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 Copyright (c) 2024 Mew

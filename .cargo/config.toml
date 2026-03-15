@@ -1,0 +1,14 @@
+# Linker flags for smaller release binary (GNU ld / MinGW)
+# MSVC toolchain ignores these; release already uses /OPT:REF,ICF
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-Wl,--gc-sections"]
+
+[target.i686-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-Wl,--gc-sections"]
+
+# Linux
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,--gc-sections"]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,--gc-sections"]

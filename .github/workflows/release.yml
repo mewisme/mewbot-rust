@@ -2,19 +2,21 @@ name: Build and Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (e.g. 0.2.1). Leave empty to use Cargo.toml version.'
+        description: "Version (e.g. 0.2.1). Leave empty to use Cargo.toml version."
         required: false
+        type: string
 
 permissions:
-  contents: write  # read + write (push tags, create releases, upload assets)
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  BIN_NAME: mewbot
 
 jobs:
   prepare:
@@ -25,60 +27,50 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Get version
+      - name: Resolve version
         id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          elif [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.ref }}" ]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
+          set -euo pipefail
+      
+          if [ -n "${INPUT_VERSION}" ]; then
+            VERSION="${INPUT_VERSION}"
           else
-            VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/' | tr -d ' ')
+            VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')
           fi
+      
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Using version: ${VERSION}"
 
-      - name: Create and push tag (workflow_dispatch only)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists"
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "$TAG" -m "Release $TAG"
-            git push origin "$TAG"
-          fi
-
   build:
     needs: prepare
-    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
             os: linux
+            arch: x86_64
             artifact_suffix: x86_64-unknown-linux-gnu
             bin_name: mewbot
           - runner: windows-latest
             os: windows
+            arch: x86_64
             artifact_suffix: x86_64-pc-windows-msvc.exe
             bin_name: mewbot.exe
+
     runs-on: ${{ matrix.runner }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
 
       - name: Cache cargo registry and target
         uses: Swatinem/rust-cache@v2
@@ -86,48 +78,74 @@ jobs:
           shared-key: release-${{ matrix.os }}
 
       - name: Build release binary
-        run: cargo build --release
+        run: cargo build --release --bin ${{ env.BIN_NAME }}
 
-      - name: Prepare asset and metadata
-        id: asset
+      - name: Prepare Linux asset metadata
+        if: matrix.os == 'linux'
         shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BIN_NAME: ${{ matrix.bin_name }}
+          SUFFIX: ${{ matrix.artifact_suffix }}
+          OS_NAME: ${{ matrix.os }}
+          ARCH: ${{ matrix.arch }}
         run: |
-          VERSION="${{ needs.prepare.outputs.version }}"
-          BIN_NAME="${{ matrix.bin_name }}"
-          SUFFIX="${{ matrix.artifact_suffix }}"
+          set -euo pipefail
+
           RELEASE_BIN="target/release/${BIN_NAME}"
           OUT_NAME="mewbot-${VERSION}-${SUFFIX}"
+
           cp "$RELEASE_BIN" "$OUT_NAME"
-          [ "${{ matrix.os }}" = "linux" ] && chmod +x "$OUT_NAME"
-          SIZE=$(wc -c < "$OUT_NAME")
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            SHA256=$(certutil -hashfile "$OUT_NAME" SHA256 2>/dev/null | tail -1 | tr -d ' \r\n')
-            OS_LABEL="windows"
-          else
-            SHA256=$(sha256sum "$OUT_NAME" | awk '{print $1}')
-            OS_LABEL="linux"
-          fi
-          ARCH="x86_64"
-          echo "name=$OUT_NAME" >> "$GITHUB_OUTPUT"
-          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
-          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "{\"name\":\"$OUT_NAME\",\"os\":\"$OS_LABEL\",\"arch\":\"$ARCH\",\"size\":$SIZE,\"sha256\":\"$SHA256\"}" > asset-info.json
-          cat asset-info.json
+          chmod +x "$OUT_NAME"
+
+          SIZE="$(wc -c < "$OUT_NAME" | tr -d '[:space:]')"
+          SHA256="$(sha256sum "$OUT_NAME" | awk '{print $1}')"
+
+          printf '%s\n' "{\"name\":\"$OUT_NAME\",\"os\":\"$OS_NAME\",\"arch\":\"$ARCH\",\"size\":$SIZE,\"sha256\":\"$SHA256\"}" > asset-info.json
+
+      - name: Prepare Windows asset metadata
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BIN_NAME: ${{ matrix.bin_name }}
+          SUFFIX: ${{ matrix.artifact_suffix }}
+          OS_NAME: ${{ matrix.os }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $releaseBin = "target/release/$env:BIN_NAME"
+          $outName = "mewbot-$env:VERSION-$env:SUFFIX"
+
+          Copy-Item $releaseBin $outName -Force
+
+          $size = (Get-Item $outName).Length
+          $sha256 = (Get-FileHash $outName -Algorithm SHA256).Hash.ToLowerInvariant()
+
+          $json = @{
+            name   = $outName
+            os     = $env:OS_NAME
+            arch   = $env:ARCH
+            size   = $size
+            sha256 = $sha256
+          } | ConvertTo-Json -Compress
+
+          Set-Content -Path asset-info.json -Value $json -NoNewline
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.os }}
           path: |
-            ${{ steps.asset.outputs.name }}
+            mewbot-${{ needs.prepare.outputs.version }}-${{ matrix.artifact_suffix }}
             asset-info.json
 
   release:
     needs: [prepare, build]
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - name: Download all build artifacts
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -135,39 +153,77 @@ jobs:
           merge-multiple: false
 
       - name: Create latest.json
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
-          VERSION="${{ needs.prepare.outputs.version }}"
-          TAG="${{ needs.prepare.outputs.tag }}"
-          REPO="${{ github.repository }}"
-          PUBLISHED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          FILES_JSON=$(jq -s . artifacts/build-*/asset-info.json)
+          set -euo pipefail
+
+          PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          FILES_JSON="$(jq -s . artifacts/build-*/asset-info.json)"
+
           jq -n \
             --arg version "$VERSION" \
+            --arg current_version "$VERSION" \
             --arg tag "$TAG" \
-            --arg repo "$REPO" \
             --arg published_at "$PUBLISHED_AT" \
+            --arg repo "$REPO" \
             --argjson files "$FILES_JSON" \
-            '{version: $version, tag: $tag, repository: $repo, published_at: $published_at, download_url_template: ("https://github.com/" + $repo + "/releases/download/" + $tag + "/{filename}"), files: $files}' \
-            > latest.json
+            '{
+              currentVersion: $current_version,
+              version: $version,
+              tag: $tag,
+              publishedAt: $published_at,
+              downloadUrlTemplate: ("https://github.com/" + $repo + "/releases/download/" + $tag + "/{filename}"),
+              files: $files
+            }' > latest.json
+
           cat latest.json
 
       - name: Collect release assets
+        shell: bash
         run: |
+          set -euo pipefail
+
           mkdir -p release-assets
+
           for dir in artifacts/build-*; do
             for f in "$dir"/*; do
-              [ -f "$f" ] && [ "$(basename "$f")" != "asset-info.json" ] && cp "$f" release-assets/
+              if [ -f "$f" ] && [ "$(basename "$f")" != "asset-info.json" ]; then
+                cp "$f" release-assets/
+              fi
             done
           done
+
           cp latest.json release-assets/
           ls -la release-assets/
 
-      - name: Create GitHub Release
+      - name: Create Git tag if missing
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+      
+          git fetch --tags
+      
+          if git rev-parse "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           name: Release ${{ needs.prepare.outputs.tag }}
-          generate_release_notes: true
           files: release-assets/*
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

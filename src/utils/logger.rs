@@ -70,29 +70,18 @@ macro_rules! log_location {
     };
 }
 
-pub fn log_internal(level: LogLevel, message: &str, file: &str, line: u32) {
+pub fn log_internal(level: LogLevel, message: &str, _file: &str, _line: u32) {
     use colors::*;
 
     let timestamp = format_timestamp();
     let color = level.color();
     let label = level.label();
 
-    let filename = file
-        .split('/')
-        .last()
-        .or_else(|| file.split('\\').last())
-        .unwrap_or(file);
-
     println!(
-        "{}{}{}{} {}{}{}:{}{} {}{}[{}]{} {}",
+        "{}{}{}{} {}{}[{}]{} {}",
         UNDERLINE,
         BRIGHT_BLACK,
         timestamp,
-        RESET,
-        UNDERLINE,
-        BRIGHT_BLACK,
-        filename,
-        line,
         RESET,
         BOLD,
         color,

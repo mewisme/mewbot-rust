@@ -5,6 +5,7 @@ mod context;
 mod events;
 mod permissions;
 mod registry;
+mod updater;
 mod utils;
 mod wallet_store;
 
@@ -17,6 +18,8 @@ use registry::Registry;
 use serenity::model::gateway::GatewayIntents;
 use serenity::prelude::*;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::sleep;
 
 struct Handler {
     bot_context: Arc<BotContext>,
@@ -64,6 +67,8 @@ async fn main() -> Result<()> {
         }
     }
 
+    crate::info!("Bot version: v{}", env!("CARGO_PKG_VERSION"));
+
     let config = Config::load()?;
     crate::done!("Configuration loaded successfully");
 
@@ -90,7 +95,31 @@ async fn main() -> Result<()> {
         })
         .await?;
 
-    crate::info!("Starting bot...");
+    let shard_manager = client.shard_manager.clone();
+    tokio::spawn(async move {
+        loop {
+            sleep(Duration::from_secs(60)).await;
+            let release = match updater::fetch_latest().await {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            let asset = match updater::find_asset_for_current_platform(&release.files) {
+                Some(a) => a,
+                None => continue,
+            };
+            if !updater::is_newer(env!("CARGO_PKG_VERSION"), &release.version) {
+                continue;
+            }
+            crate::info!("New version {} available, updating...", release.version);
+            if let Err(e) = updater::run_update(&release, asset, shard_manager.shutdown_all()).await
+            {
+                crate::error!("Update failed: {:?}", e);
+                continue;
+            }
+            break;
+        }
+    });
+
     client.start().await?;
 
     Ok(())

@@ -25,7 +25,6 @@ pub async fn ready(ctx: Context, ready: Ready, bot_context: &BotContext) {
         }
     }
 
-    crate::info!("Registering slash commands...");
     let registry = bot_context.registry.lock().await;
     let commands = registry.all_commands();
 

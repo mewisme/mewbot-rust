@@ -31,12 +31,15 @@ env_logger = "0.11"
 log = "0.4"
 clap = { version = "4.5", features = ["derive"] }
 reqwest = { version = "0.12", features = ["json"] }
+semver = "1.0"
+self-replace = "1.5"
+sha2 = "0.10"
 
 # Release build: smallest binary size
 [profile.release]
-opt-level = "z"      # optimize for size (no loop vectorization)
-lto = true           # link-time optimization
-codegen-units = 1    # better optimization, slower compile
-strip = true         # strip symbols (binary only)
-panic = "abort"      # no unwinding = smaller binary
-debug = false        # no debug info
+opt-level = "z"   # optimize for size (no loop vectorization)
+lto = true        # link-time optimization
+codegen-units = 1 # better optimization, slower compile
+strip = true      # strip symbols (binary only)
+panic = "abort"   # no unwinding = smaller binary
+debug = false     # no debug info

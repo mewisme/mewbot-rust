@@ -1,6 +1,6 @@
 [package]
 name = "mewbot"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 authors = ["Mew"]
 description = "A Discord bot built with Rust using the Serenity framework. Supports both slash commands and prefix commands with cooldowns and a dynamic help system."

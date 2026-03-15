@@ -1,6 +1,6 @@
-use crate::context::BotContext;
-use crate::permissions::{get_permission_level, has_permission, required_permission_message};
-use crate::utils;
+use crate::core::context::BotContext;
+use crate::core::permissions::{get_permission_level, has_permission, required_permission_message};
+use crate::core::utils;
 use serenity::model::channel::Message;
 use serenity::model::permissions::Permissions;
 use serenity::prelude::Context;

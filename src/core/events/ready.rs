@@ -1,10 +1,8 @@
-use crate::context::BotContext;
+use crate::core::context::BotContext;
 use serenity::model::gateway::Ready;
 use serenity::prelude::Context;
 
 pub async fn ready(ctx: Context, ready: Ready, bot_context: &BotContext) {
-    crate::done!("{} is connected!", ready.user.name);
-
     match ctx.http.get_global_commands().await {
         Ok(existing_commands) => {
             for existing_cmd in existing_commands {
@@ -34,10 +32,10 @@ pub async fn ready(ctx: Context, ready: Ready, bot_context: &BotContext) {
         cmd.register_slash(&mut create_cmd);
 
         match ctx.http.create_global_command(&create_cmd).await {
-            Ok(_) => crate::done!("Registered slash command: {}", command_name),
+            Ok(_) => {}
             Err(e) => crate::error!("Failed to register slash command {}: {}", command_name, e),
         }
     }
 
-    crate::done!("Ready! Bot is online.");
+    crate::done!("{} is connected 🚀", ready.user.name);
 }

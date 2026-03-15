@@ -1,8 +1,3 @@
-//! Permission hierarchy: Owner > Admin > Member.
-//! - **Owner**: bot owner (from config ADMIN_USER_ID); can use all commands in every server.
-//! - **Admin**: server admin (guild owner or has `Permissions::ADMINISTRATOR` in that guild only).
-//! - **Member**: everyone else.
-
 use serenity::model::id::UserId;
 use std::sync::OnceLock;
 

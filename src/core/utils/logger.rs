@@ -49,11 +49,11 @@ impl LogLevel {
 
     fn label(&self) -> &'static str {
         match self {
-            LogLevel::Info => "INFO",
-            LogLevel::Error => "ERRO",
-            LogLevel::Warn => "WARN",
-            LogLevel::Debug => "DBUG",
-            LogLevel::Done => "DONE",
+            LogLevel::Info => "🛈",
+            LogLevel::Error => "✗",
+            LogLevel::Warn => "⚠",
+            LogLevel::Debug => "🐛",
+            LogLevel::Done => "✓",
         }
     }
 }
@@ -63,14 +63,7 @@ fn format_timestamp() -> String {
     now.format("%H:%M:%S").to_string()
 }
 
-#[macro_export]
-macro_rules! log_location {
-    () => {
-        (file!(), line!())
-    };
-}
-
-pub fn log_internal(level: LogLevel, message: &str, _file: &str, _line: u32) {
+pub fn log_internal(level: LogLevel, message: &str) {
     use colors::*;
 
     let timestamp = format_timestamp();
@@ -78,27 +71,17 @@ pub fn log_internal(level: LogLevel, message: &str, _file: &str, _line: u32) {
     let label = level.label();
 
     println!(
-        "{}{}{}{} {}{}[{}]{} {}",
-        UNDERLINE,
-        BRIGHT_BLACK,
-        timestamp,
-        RESET,
-        BOLD,
-        color,
-        label,
-        RESET,
-        message
+        "{}{}{}{} {}{} {} {} {}",
+        UNDERLINE, BRIGHT_BLACK, timestamp, RESET, BOLD, color, label, RESET, message
     );
 }
 
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
-        $crate::utils::logger::log_internal(
-            $crate::utils::logger::LogLevel::Info,
-            &format!($($arg)*),
-            file!(),
-            line!()
+        $crate::core::utils::logger::log_internal(
+            $crate::core::utils::logger::LogLevel::Info,
+            &format!($($arg)*)
         )
     };
 }
@@ -106,11 +89,9 @@ macro_rules! info {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        $crate::utils::logger::log_internal(
-            $crate::utils::logger::LogLevel::Error,
-            &format!($($arg)*),
-            file!(),
-            line!()
+        $crate::core::utils::logger::log_internal(
+            $crate::core::utils::logger::LogLevel::Error,
+            &format!($($arg)*)
         )
     };
 }
@@ -118,11 +99,9 @@ macro_rules! error {
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
-        $crate::utils::logger::log_internal(
-            $crate::utils::logger::LogLevel::Warn,
-            &format!($($arg)*),
-            file!(),
-            line!()
+        $crate::core::utils::logger::log_internal(
+            $crate::core::utils::logger::LogLevel::Warn,
+            &format!($($arg)*)
         )
     };
 }
@@ -130,11 +109,9 @@ macro_rules! warn {
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
-        $crate::utils::logger::log_internal(
-            $crate::utils::logger::LogLevel::Debug,
-            &format!($($arg)*),
-            file!(),
-            line!()
+        $crate::core::utils::logger::log_internal(
+            $crate::core::utils::logger::LogLevel::Debug,
+            &format!($($arg)*)
         )
     };
 }
@@ -142,11 +119,9 @@ macro_rules! debug {
 #[macro_export]
 macro_rules! done {
     ($($arg:tt)*) => {
-        $crate::utils::logger::log_internal(
-            $crate::utils::logger::LogLevel::Done,
-            &format!($($arg)*),
-            file!(),
-            line!()
+        $crate::core::utils::logger::log_internal(
+            $crate::core::utils::logger::LogLevel::Done,
+            &format!($($arg)*)
         )
     };
 }

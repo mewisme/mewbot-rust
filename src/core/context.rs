@@ -1,5 +1,5 @@
-use crate::config::Config;
-use crate::registry::Registry;
+use crate::core::config::Config;
+use crate::core::registry::Registry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

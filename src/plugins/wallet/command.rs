@@ -1,9 +1,10 @@
 //! Wallet command: check (default), credit, debit, init, reset.
 //! Data stored in `data/wallet.json`. Permission: check self = anyone; check others / add / remove = bot owner or server admin.
 
-use crate::commands::Command;
-use crate::permissions::{get_permission_level, has_permission, PermissionLevel};
-use crate::wallet_store::{load_wallet, save_wallet, WALLET_LOCK};
+use crate::core::command::SubCommandInfo;
+use crate::core::permissions::{get_permission_level, has_permission, PermissionLevel};
+use crate::core::Command;
+use crate::plugins::wallet::store::{load_wallet, save_wallet, WALLET_LOCK};
 use async_trait::async_trait;
 use serenity::all::{CommandDataOptionValue, CommandOptionType};
 use serenity::builder::{
@@ -588,7 +589,7 @@ impl Command for Wallet {
         let guild_id = match msg.guild_id {
             Some(id) => id,
             None => {
-                crate::utils::send_error_message(msg, ctx, "This command can only be used in a server.").await;
+                crate::core::utils::send_error_message(msg, ctx, "This command can only be used in a server.").await;
                 return Ok(());
             }
         };
@@ -617,27 +618,28 @@ impl Command for Wallet {
         let (guild_owner_id, has_administrator) = match permission_data {
             Some((o, h)) => (o, h),
             None => {
-                crate::utils::send_error_message(msg, ctx, "Could not load server information.").await;
+                crate::core::utils::send_error_message(msg, ctx, "Could not load server information.").await;
                 return Ok(());
             }
         };
         let caller_level = get_permission_level(guild_owner_id, msg.author.id, has_administrator);
 
         let mut args_iter = args.iter().peekable();
-        let sub: String = args_iter
+        let sub_arg: String = args_iter
             .next()
             .map(|s| (*s).to_lowercase())
             .unwrap_or_else(|| "check".to_string());
+        let sub: &str = self.resolve_subcommand(&sub_arg).unwrap_or(&sub_arg);
 
         let mentions: Vec<UserId> = filter_human_mentions(msg);
 
-        match sub.as_str() {
+        match sub {
             "check" => {
                 let target_ids: Vec<UserId> = if mentions.is_empty() {
                     vec![msg.author.id]
                 } else {
                     if !has_permission(caller_level, PermissionLevel::Admin) {
-                        crate::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to view others' wallets.").await;
+                        crate::core::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to view others' wallets.").await;
                         return Ok(());
                     }
                     mentions
@@ -651,7 +653,7 @@ impl Command for Wallet {
                     }
                 }
                 if !not_inited.is_empty() {
-                    crate::utils::send_error_message(
+                    crate::core::utils::send_error_message(
                         msg,
                         ctx,
                         &format!(
@@ -680,7 +682,7 @@ impl Command for Wallet {
             }
             "init" => {
                 if !has_permission(caller_level, PermissionLevel::Admin) {
-                    crate::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to init wallets.").await;
+                    crate::core::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to init wallets.").await;
                     return Ok(());
                 }
                 let target_ids: Vec<UserId> = if mentions.is_empty() {
@@ -709,7 +711,7 @@ impl Command for Wallet {
                     mentions
                 };
                 if target_ids.is_empty() {
-                    crate::utils::send_error_message(msg, ctx, "No users to init (could not load server members from cache or API).").await;
+                    crate::core::utils::send_error_message(msg, ctx, "No users to init (could not load server members from cache or API).").await;
                     return Ok(());
                 }
                 let init_balance: i64 = args_iter
@@ -752,7 +754,7 @@ impl Command for Wallet {
             }
             "reset" => {
                 if !has_permission(caller_level, PermissionLevel::Admin) {
-                    crate::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to reset wallets.").await;
+                    crate::core::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to reset wallets.").await;
                     return Ok(());
                 }
                 let target_ids: Vec<UserId> = if mentions.is_empty() {
@@ -781,7 +783,7 @@ impl Command for Wallet {
                     mentions
                 };
                 if target_ids.is_empty() {
-                    crate::utils::send_error_message(msg, ctx, "No users to reset (could not load server members from cache or API).").await;
+                    crate::core::utils::send_error_message(msg, ctx, "No users to reset (could not load server members from cache or API).").await;
                     return Ok(());
                 }
                 let reset_balance: i64 = args_iter
@@ -811,15 +813,15 @@ impl Command for Wallet {
                     )
                     .await?;
             }
-            "credit" | "add" => {
+            "credit" => {
                 if !has_permission(caller_level, PermissionLevel::Admin) {
-                    crate::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to add balance.").await;
+                    crate::core::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to add balance.").await;
                     return Ok(());
                 }
                 let amount_str = args_iter.next().map_or("0", |v| *v);
                 let amount: i64 = amount_str.parse().unwrap_or(0);
                 if amount <= 0 {
-                    crate::utils::send_error_message(msg, ctx, "Invalid amount (positive number required).").await;
+                    crate::core::utils::send_error_message(msg, ctx, "Invalid amount (positive number required).").await;
                     return Ok(());
                 }
                 let target_ids: Vec<UserId> = if mentions.is_empty() {
@@ -836,7 +838,7 @@ impl Command for Wallet {
                     }
                 }
                 if !not_inited.is_empty() {
-                    crate::utils::send_error_message(
+                    crate::core::utils::send_error_message(
                         msg,
                         ctx,
                         &format!(
@@ -868,15 +870,15 @@ impl Command for Wallet {
                     )
                     .await?;
             }
-            "debit" | "remove" => {
+            "debit" => {
                 if !has_permission(caller_level, PermissionLevel::Admin) {
-                    crate::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to remove balance.").await;
+                    crate::core::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to remove balance.").await;
                     return Ok(());
                 }
                 let amount_str = args_iter.next().map_or("0", |v| *v);
                 let amount: i64 = amount_str.parse().unwrap_or(0);
                 if amount <= 0 {
-                    crate::utils::send_error_message(msg, ctx, "Invalid amount (positive number required).").await;
+                    crate::core::utils::send_error_message(msg, ctx, "Invalid amount (positive number required).").await;
                     return Ok(());
                 }
                 let target_ids: Vec<UserId> = if mentions.is_empty() {
@@ -893,7 +895,7 @@ impl Command for Wallet {
                     }
                 }
                 if !not_inited.is_empty() {
-                    crate::utils::send_error_message(
+                    crate::core::utils::send_error_message(
                         msg,
                         ctx,
                         &format!(
@@ -937,7 +939,7 @@ impl Command for Wallet {
             }
             "unit" => {
                 if !has_permission(caller_level, PermissionLevel::Admin) {
-                    crate::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to set the wallet unit.").await;
+                    crate::core::utils::send_error_message(msg, ctx, "You need **bot owner** or **server admin** to set the wallet unit.").await;
                     return Ok(());
                 }
                 let unit_value = args_iter
@@ -971,7 +973,7 @@ impl Command for Wallet {
                 let _guard = WALLET_LOCK.lock().await;
                 let data = load_wallet().await;
                 if !data.has_user(msg.author.id.get()) {
-                    crate::utils::send_error_message(msg, ctx, "You have not been initialized. Use **wallet init** first.").await;
+                    crate::core::utils::send_error_message(msg, ctx, "You have not been initialized. Use **wallet init** first.").await;
                     return Ok(());
                 }
                 let bal = data.get_balance_if_exists(msg.author.id.get()).unwrap_or(0);
@@ -1004,6 +1006,46 @@ impl Command for Wallet {
 
     fn required_permission_level(&self) -> Option<PermissionLevel> {
         None
+    }
+
+    fn version(&self) -> &'static str {
+        "1.0.0"
+    }
+
+    fn subcommands(&self) -> &'static [SubCommandInfo] {
+        static SUBCOMMANDS: &[SubCommandInfo] = &[
+            SubCommandInfo {
+                name: "check",
+                description: "Check wallet balance (self or mentioned users)",
+                aliases: &["bal", "balance"],
+            },
+            SubCommandInfo {
+                name: "credit",
+                description: "Add money (bot owner / server admin only)",
+                aliases: &["add"],
+            },
+            SubCommandInfo {
+                name: "debit",
+                description: "Remove money (bot owner / server admin only)",
+                aliases: &["remove", "sub"],
+            },
+            SubCommandInfo {
+                name: "init",
+                description: "Initialize wallet(s) (bot owner / server admin only)",
+                aliases: &[],
+            },
+            SubCommandInfo {
+                name: "reset",
+                description: "Reset wallet(s) to balance (bot owner / server admin only)",
+                aliases: &[],
+            },
+            SubCommandInfo {
+                name: "unit",
+                description: "Set display unit for balance (e.g. xu) (bot owner / server admin only)",
+                aliases: &[],
+            },
+        ];
+        SUBCOMMANDS
     }
 }
 

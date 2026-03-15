@@ -1,6 +1,7 @@
-use crate::commands::Command;
+use crate::core::command::{Command, CommandInfo, CommandLister, SubCommandInfo};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct Registry {
     commands: HashMap<String, Arc<dyn Command>>,
@@ -72,5 +73,41 @@ impl Registry {
 impl Default for Registry {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+pub struct RegistryCommandLister(pub Arc<Mutex<Registry>>);
+
+impl CommandLister for RegistryCommandLister {
+    fn list(&self) -> Vec<CommandInfo> {
+        let registry = self.0.try_lock();
+        let Ok(registry) = registry else {
+            return Vec::new();
+        };
+        let commands = registry.all_commands();
+        commands
+            .into_iter()
+            .map(|cmd| {
+                let subcommands: Vec<SubCommandInfo> = cmd
+                    .subcommands()
+                    .iter()
+                    .map(|s| SubCommandInfo {
+                        name: s.name,
+                        description: s.description,
+                        aliases: s.aliases,
+                    })
+                    .collect();
+                CommandInfo {
+                    name: cmd.name().to_string(),
+                    description: cmd.description().to_string(),
+                    prefix: cmd.prefix().map(String::from),
+                    aliases: cmd.aliases().iter().map(|s| (*s).to_string()).collect(),
+                    cooldown_secs: cmd.cooldown_duration().as_secs(),
+                    required_permission: cmd.required_permission_level(),
+                    version: cmd.version().to_string(),
+                    subcommands,
+                }
+            })
+            .collect()
     }
 }

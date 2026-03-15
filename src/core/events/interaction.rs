@@ -1,6 +1,6 @@
-use crate::context::BotContext;
-use crate::permissions::{get_permission_level, has_permission, required_permission_message};
-use crate::utils;
+use crate::core::context::BotContext;
+use crate::core::permissions::{get_permission_level, has_permission, required_permission_message};
+use crate::core::utils;
 use serenity::builder::{
     CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage,
 };
@@ -89,7 +89,7 @@ pub async fn interaction(ctx: Context, interaction: Interaction, bot_context: &B
                                         .color(0xff0000),
                                 )
                                 .ephemeral(true),
-                    ),
+                        ),
                     )
                     .await;
                 return;

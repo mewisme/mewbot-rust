@@ -1,20 +1,13 @@
+#![allow(dead_code, unused_imports)]
+
 mod cli;
-mod commands;
-mod config;
-mod context;
-mod events;
-mod permissions;
-mod registry;
-mod updater;
-mod utils;
-mod wallet_store;
+mod core;
+mod plugins;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
-use config::Config;
-use context::BotContext;
-use registry::Registry;
+use core::{BotContext, Config, PluginApi, Registry, RegistryCommandLister};
 use serenity::model::gateway::GatewayIntents;
 use serenity::prelude::*;
 use std::io::{self, Write};
@@ -29,11 +22,11 @@ struct Handler {
 #[async_trait::async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, ctx: Context, ready: serenity::model::gateway::Ready) {
-        events::ready::ready(ctx, ready, &self.bot_context).await;
+        core::events::ready::ready(ctx, ready, &self.bot_context).await;
     }
 
     async fn message(&self, ctx: Context, msg: serenity::model::channel::Message) {
-        events::message::message(ctx, msg, &self.bot_context).await;
+        core::events::message::message(ctx, msg, &self.bot_context).await;
     }
 
     async fn interaction_create(
@@ -41,7 +34,7 @@ impl EventHandler for Handler {
         ctx: Context,
         interaction: serenity::model::application::Interaction,
     ) {
-        events::interaction::interaction(ctx, interaction, &self.bot_context).await;
+        core::events::interaction::interaction(ctx, interaction, &self.bot_context).await;
     }
 }
 
@@ -54,8 +47,8 @@ async fn main() -> Result<()> {
 
     if let Some(command) = cli.command {
         match command {
-            cli::Commands::Generate { name } => {
-                cli::generate_command(&name)?;
+            cli::Commands::GeneratePlugin { name } => {
+                cli::generate_plugin(&name)?;
                 return Ok(());
             }
             cli::Commands::Version => {
@@ -70,16 +63,34 @@ async fn main() -> Result<()> {
     }
 
     let _ = io::stdout().flush();
-    crate::info!("Bot version: v{}", updater::current_version());
+    crate::info!("Bot version: v{}", core::updater::current_version());
     crate::info!("Author: {}", env!("CARGO_PKG_AUTHORS"));
     if std::env::var("MEWBOT_JUST_UPDATED").is_ok() {
-        crate::done!("Updated and relaunched successfully");
+        crate::done!("Updated and relaunched successfully 🎉");
+    }
+
+    if let Ok(release) = core::updater::fetch_latest().await {
+        if let Some(asset) = core::updater::find_asset_for_current_platform(&release.files) {
+            if core::updater::is_newer(&core::updater::current_version(), &release.version) {
+                crate::info!("New version {} available, updating 🚀", release.version);
+                if core::updater::run_update(&release, asset, async {})
+                    .await
+                    .is_ok()
+                {
+                    return Ok(());
+                }
+            } else {
+                crate::done!("Bot is up to date 🎉");
+            }
+        }
     }
 
     let config = Config::load()?;
-    crate::done!("Configuration loaded successfully");
+    crate::done!("Configuration loaded successfully 🔧");
 
-    permissions::init_bot_owner_id(config.admin_user_id.map(serenity::model::id::UserId::new));
+    core::permissions::init_bot_owner_id(
+        config.admin_user_id.map(serenity::model::id::UserId::new),
+    );
 
     let registry = Registry::new();
 
@@ -87,10 +98,13 @@ async fn main() -> Result<()> {
 
     {
         let mut reg = bot_context.registry.lock().await;
-        utils::register_commands(&mut reg, bot_context.clone());
+        let command_lister = Arc::new(RegistryCommandLister(bot_context.registry.clone()));
+        let api = PluginApi::new(bot_context.config.clone(), command_lister);
+        plugins::register_commands(&mut reg, api);
     }
-    crate::done!("Commands registered");
+    crate::done!("Commands registered 📦");
 
+    let config = &bot_context.config;
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
         | GatewayIntents::GUILDS
@@ -103,38 +117,23 @@ async fn main() -> Result<()> {
         .await?;
 
     let shard_manager = client.shard_manager.clone();
-    if let Ok(release) = updater::fetch_latest().await {
-        if let Some(asset) = updater::find_asset_for_current_platform(&release.files) {
-            if updater::is_newer(&updater::current_version(), &release.version) {
-                crate::info!("New version {} available, updating", release.version);
-                if updater::run_update(&release, asset, shard_manager.shutdown_all())
-                    .await
-                    .is_ok()
-                {
-                    return Ok(());
-                }
-            } else {
-                crate::done!("Bot is up to date !");
-            }
-        }
-    }
-
     tokio::spawn(async move {
         loop {
             sleep(Duration::from_secs(60)).await;
-            let release = match updater::fetch_latest().await {
+            let release = match core::updater::fetch_latest().await {
                 Ok(r) => r,
                 Err(_) => continue,
             };
-            let asset = match updater::find_asset_for_current_platform(&release.files) {
+            let asset = match core::updater::find_asset_for_current_platform(&release.files) {
                 Some(a) => a,
                 None => continue,
             };
-            if !updater::is_newer(&updater::current_version(), &release.version) {
+            if !core::updater::is_newer(&core::updater::current_version(), &release.version) {
                 continue;
             }
-            crate::info!("New version {} available, updating", release.version);
-            if let Err(e) = updater::run_update(&release, asset, shard_manager.shutdown_all()).await
+            crate::info!("New version {} available, updating 🚀", release.version);
+            if let Err(e) =
+                core::updater::run_update(&release, asset, shard_manager.shutdown_all()).await
             {
                 crate::error!("Update failed: {:?}", e);
                 continue;

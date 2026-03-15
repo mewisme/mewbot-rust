@@ -1,5 +1,3 @@
-//! Wallet data stored in JSON file. Path: `data/wallet.json`.
-
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;

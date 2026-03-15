@@ -1,5 +1,3 @@
-//! Auto-update: fetch latest.json, compare version, download matching binary, replace self, relaunch.
-
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::Deserialize;

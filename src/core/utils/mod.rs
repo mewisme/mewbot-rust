@@ -1,11 +1,7 @@
 pub mod logger;
 
-use crate::commands::*;
-use crate::context::BotContext;
-use crate::registry::Registry;
 use chrono::{DateTime, Utc};
 use serenity::model::channel::Message;
-use std::sync::Arc;
 use std::time::Duration;
 
 #[allow(dead_code)]
@@ -61,7 +57,10 @@ pub async fn send_error_message(msg: &Message, ctx: &serenity::prelude::Context,
         )
         .await
     {
-        crate::error!("Failed to send error message: {}", e);
+        crate::core::utils::logger::log_internal(
+            crate::core::utils::logger::LogLevel::Error,
+            &format!("Failed to send error message: {}", e),
+        );
     }
 }
 
@@ -81,13 +80,9 @@ pub async fn send_success_message(msg: &Message, ctx: &serenity::prelude::Contex
         )
         .await
     {
-        crate::error!("Failed to send success message: {}", e);
+        crate::core::utils::logger::log_internal(
+            crate::core::utils::logger::LogLevel::Error,
+            &format!("Failed to send success message: {}", e),
+        );
     }
-}
-
-pub fn register_commands(registry: &mut Registry, bot_context: Arc<BotContext>) {
-    let wallet_cmd = wallet::create();
-    let help_cmd = help::create(bot_context.registry.clone(), bot_context.config.clone());
-    registry.register(help_cmd);
-    registry.register(wallet_cmd);
 }
